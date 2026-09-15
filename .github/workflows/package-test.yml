@@ -74,6 +74,49 @@ jobs:
             "ghcr.io/gnu-octave/octave:$VERSION" \
             octave-cli --norc --no-history --eval "$code" 2>&1 | tee test.log
 
+      - name: Show the failed tests
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-logs
+          see='s/^See the file (.*) for additional details\.$/\1/p'
+          log="$(tr -d '\r' < test.log 2>/dev/null | sed -nE "$see" \
+                 | tail -1 | sed 's#.*[\\/]##')"
+          for f in "$log" test_suite.log fntests.log; do
+            if [ -n "$f" ] && [ -f "$f" ]; then
+              cp "$f" test-logs/
+              tr -d '\r' < "$f" | awk '
+                /^>>>>> processing / { file = substr ($0, 18); shown = 0; next }
+                /^\*\*\*\*\* / || /^Files with no tests:/ {
+                  if (bad) {
+                    if (!shown) { print "==> " file; shown = 1 }
+                    printf "%s", block
+                  }
+                  block = ""; bad = 0
+                  if (/^Files with no tests:/) exit
+                }
+                /^\*\*\*\*\* / { block = $0 "\n"; next }
+                block != "" { block = block $0 "\n"; if (/^!!!!! /) bad = 1 }
+                END {
+                  if (bad) { if (!shown) print "==> " file; printf "%s", block }
+                }'
+              break
+            fi
+          done
+          if [ -f test.log ]; then
+            cp test.log test-logs/
+          fi
+
+      - name: Upload the test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-linux-${{ matrix.version }}
+          path: test-logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Check the test results
         shell: bash
         run: |
@@ -141,6 +184,49 @@ jobs:
           code+="pkg ('load', '$NAME'); pkg ('test', '$NAME');"
           octave-launch --no-gui --norc --silent --no-history --eval "$code" \
             2>&1 | tee test.log
+
+      - name: Show the failed tests
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-logs
+          see='s/^See the file (.*) for additional details\.$/\1/p'
+          log="$(tr -d '\r' < test.log 2>/dev/null | sed -nE "$see" \
+                 | tail -1 | sed 's#.*[\\/]##')"
+          for f in "$log" test_suite.log fntests.log; do
+            if [ -n "$f" ] && [ -f "$f" ]; then
+              cp "$f" test-logs/
+              tr -d '\r' < "$f" | awk '
+                /^>>>>> processing / { file = substr ($0, 18); shown = 0; next }
+                /^\*\*\*\*\* / || /^Files with no tests:/ {
+                  if (bad) {
+                    if (!shown) { print "==> " file; shown = 1 }
+                    printf "%s", block
+                  }
+                  block = ""; bad = 0
+                  if (/^Files with no tests:/) exit
+                }
+                /^\*\*\*\*\* / { block = $0 "\n"; next }
+                block != "" { block = block $0 "\n"; if (/^!!!!! /) bad = 1 }
+                END {
+                  if (bad) { if (!shown) print "==> " file; printf "%s", block }
+                }'
+              break
+            fi
+          done
+          if [ -f test.log ]; then
+            cp test.log test-logs/
+          fi
+
+      - name: Upload the test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-windows-${{ inputs.windows-version }}
+          path: test-logs/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Check the test results
         shell: bash
@@ -213,6 +299,49 @@ jobs:
           code+="pkg ('install', '-local', '$PWD/package.tar.gz'); "
           code+="pkg ('load', '$NAME'); pkg ('test', '$NAME');"
           octave-cli --norc --no-history --eval "$code" 2>&1 | tee test.log
+
+      - name: Show the failed tests
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-logs
+          see='s/^See the file (.*) for additional details\.$/\1/p'
+          log="$(tr -d '\r' < test.log 2>/dev/null | sed -nE "$see" \
+                 | tail -1 | sed 's#.*[\\/]##')"
+          for f in "$log" test_suite.log fntests.log; do
+            if [ -n "$f" ] && [ -f "$f" ]; then
+              cp "$f" test-logs/
+              tr -d '\r' < "$f" | awk '
+                /^>>>>> processing / { file = substr ($0, 18); shown = 0; next }
+                /^\*\*\*\*\* / || /^Files with no tests:/ {
+                  if (bad) {
+                    if (!shown) { print "==> " file; shown = 1 }
+                    printf "%s", block
+                  }
+                  block = ""; bad = 0
+                  if (/^Files with no tests:/) exit
+                }
+                /^\*\*\*\*\* / { block = $0 "\n"; next }
+                block != "" { block = block $0 "\n"; if (/^!!!!! /) bad = 1 }
+                END {
+                  if (bad) { if (!shown) print "==> " file; printf "%s", block }
+                }'
+              break
+            fi
+          done
+          if [ -f test.log ]; then
+            cp test.log test-logs/
+          fi
+
+      - name: Upload the test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-macos
+          path: test-logs/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Check the test results
         shell: bash

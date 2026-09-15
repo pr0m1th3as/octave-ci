@@ -78,7 +78,10 @@ jobs:
 Each job builds an archive of the checked-out commit with `git archive`,
 installs the package's dependencies from Octave Packages, installs the
 package, runs `pkg test` and fails if no test passed, any test failed or any
-regression was reported.
+regression was reported.  Each job prints the failing tests from Octave's test
+log (`fntests.log`, or `test_suite.log` from Octave 12) and uploads that log
+together with the output of `pkg test` as a workflow artifact, whatever the
+result.
 
 | Input | Default | Meaning |
 |-------|---------|---------|
