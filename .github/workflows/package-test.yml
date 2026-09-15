@@ -87,20 +87,20 @@ jobs:
             if [ -n "$f" ] && [ -f "$f" ]; then
               cp "$f" test-logs/
               tr -d '\r' < "$f" | awk '
-                /^>>>>> processing / { file = substr ($0, 18); shown = 0; next }
-                /^\*\*\*\*\* / || /^Files with no tests:/ {
+                function flush() {
                   if (bad) {
                     if (!shown) { print "==> " file; shown = 1 }
                     printf "%s", block
                   }
                   block = ""; bad = 0
-                  if (/^Files with no tests:/) exit
                 }
-                /^\*\*\*\*\* / { block = $0 "\n"; next }
+                /^>>>>> processing / {
+                  flush(); file = substr ($0, 18); shown = 0; next
+                }
+                /^Files with no tests:/ { flush(); exit }
+                /^\*\*\*\*\* / { flush(); block = $0 "\n"; next }
                 block != "" { block = block $0 "\n"; if (/^!!!!! /) bad = 1 }
-                END {
-                  if (bad) { if (!shown) print "==> " file; printf "%s", block }
-                }'
+                END { flush() }'
               break
             fi
           done
@@ -198,20 +198,20 @@ jobs:
             if [ -n "$f" ] && [ -f "$f" ]; then
               cp "$f" test-logs/
               tr -d '\r' < "$f" | awk '
-                /^>>>>> processing / { file = substr ($0, 18); shown = 0; next }
-                /^\*\*\*\*\* / || /^Files with no tests:/ {
+                function flush() {
                   if (bad) {
                     if (!shown) { print "==> " file; shown = 1 }
                     printf "%s", block
                   }
                   block = ""; bad = 0
-                  if (/^Files with no tests:/) exit
                 }
-                /^\*\*\*\*\* / { block = $0 "\n"; next }
+                /^>>>>> processing / {
+                  flush(); file = substr ($0, 18); shown = 0; next
+                }
+                /^Files with no tests:/ { flush(); exit }
+                /^\*\*\*\*\* / { flush(); block = $0 "\n"; next }
                 block != "" { block = block $0 "\n"; if (/^!!!!! /) bad = 1 }
-                END {
-                  if (bad) { if (!shown) print "==> " file; printf "%s", block }
-                }'
+                END { flush() }'
               break
             fi
           done
@@ -313,20 +313,20 @@ jobs:
             if [ -n "$f" ] && [ -f "$f" ]; then
               cp "$f" test-logs/
               tr -d '\r' < "$f" | awk '
-                /^>>>>> processing / { file = substr ($0, 18); shown = 0; next }
-                /^\*\*\*\*\* / || /^Files with no tests:/ {
+                function flush() {
                   if (bad) {
                     if (!shown) { print "==> " file; shown = 1 }
                     printf "%s", block
                   }
                   block = ""; bad = 0
-                  if (/^Files with no tests:/) exit
                 }
-                /^\*\*\*\*\* / { block = $0 "\n"; next }
+                /^>>>>> processing / {
+                  flush(); file = substr ($0, 18); shown = 0; next
+                }
+                /^Files with no tests:/ { flush(); exit }
+                /^\*\*\*\*\* / { flush(); block = $0 "\n"; next }
                 block != "" { block = block $0 "\n"; if (/^!!!!! /) bad = 1 }
-                END {
-                  if (bad) { if (!shown) print "==> " file; printf "%s", block }
-                }'
+                END { flush() }'
               break
             fi
           done
