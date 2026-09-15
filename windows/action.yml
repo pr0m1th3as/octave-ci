@@ -1,0 +1,93 @@
+name: 'Install Octave for package CI (Windows)'
+description: 'Install GNU Octave for Windows, without its bundled packages'
+author: 'Andreas Bertsatos'
+
+inputs:
+  version:
+    description: 'Octave version; needs a matching release of this repository'
+    required: false
+    default: '11.3.0'
+
+outputs:
+  octave:
+    description: 'Path to octave-launch.exe'
+    value: ${{ steps.extract.outputs.octave }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Fetch the checksum
+      id: sum
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        BASE: https://github.com/pr0m1th3as/octave-ci/releases/download
+      run: |
+        set -euo pipefail
+        dir="$(cygpath -u "$RUNNER_TEMP")/octave-ci"
+        name="octave-$VERSION-w64.7z"
+        mkdir -p "$dir"
+        curl -fsSL --retry 3 -o "$dir/$name.sha256" \
+          "$BASE/octave-$VERSION/$name.sha256"
+        echo "hash=$(cut -d ' ' -f 1 "$dir/$name.sha256")" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the archive from the cache
+      id: cache
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/octave-ci/octave-${{ inputs.version }}-w64.7z
+        key: octave-ci-${{ inputs.version }}-w64-${{ steps.sum.outputs.hash }}
+
+    - name: Download and verify the archive
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        BASE: https://github.com/pr0m1th3as/octave-ci/releases/download
+      run: |
+        set -euo pipefail
+        dir="$(cygpath -u "$RUNNER_TEMP")/octave-ci"
+        name="octave-$VERSION-w64.7z"
+        if [ ! -f "$dir/$name" ]; then
+          curl -fsSL --retry 3 -o "$dir/$name" "$BASE/octave-$VERSION/$name"
+        fi
+        (cd "$dir" && sha256sum -c "$name.sha256")
+
+    - name: Save the archive to the cache
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/octave-ci/octave-${{ inputs.version }}-w64.7z
+        key: octave-ci-${{ inputs.version }}-w64-${{ steps.sum.outputs.hash }}
+
+    - name: Extract Octave and remove the bundled packages
+      id: extract
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        dir="$(cygpath -u "$RUNNER_TEMP")/octave-ci"
+        archive="$(cygpath -w "$dir/octave-$VERSION-w64.7z")"
+        rm -rf /c/octave-ci
+        7z x -y -o'C:\octave-ci' "$archive" > /dev/null
+        root="/c/octave-ci/octave-$VERSION-w64"
+        share="$root/mingw64/share/octave"
+        rm -rf "$share/packages" "$root/mingw64/lib/octave/packages" \
+               "$share"/site/api-v*/octave_packages
+        cygpath -w "$root" >> "$GITHUB_PATH"
+        launch="$(cygpath -w "$root/octave-launch.exe")"
+        echo "octave=$launch" >> "$GITHUB_OUTPUT"
+
+    - name: Check that no package is installed
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        CHECK: >-
+          printf ('Octave %s\n', version ());
+          if (! isempty (pkg ('list')))
+          error ('octave-ci: bundled packages are still installed.');
+          endif
+      run: |
+        set -euo pipefail
+        "/c/octave-ci/octave-$VERSION-w64/octave-launch.exe" --no-gui --norc \
+          --silent --no-history --eval "$CHECK"
