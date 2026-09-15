@@ -1,0 +1,69 @@
+name: Windows action
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: test-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    name: Install, build and test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Octave
+        uses: ./windows
+        with:
+          version: '11.3.0'
+
+      - name: Check that an Octave error fails the step
+        shell: bash
+        run: |
+          if octave-launch --no-gui --norc --silent --no-history \
+               --eval "error ('octave-ci: deliberate error.');"; then
+            echo "::error::octave-launch returned 0 after an Octave error"
+            exit 1
+          fi
+
+      - name: Build the test package archive
+        shell: bash
+        run: tar czf ciprobe-0.1.0.tar.gz -C tests ciprobe
+
+      - name: Install the test package
+        shell: bash
+        run: |
+          archive="$(cygpath -w "$PWD/ciprobe-0.1.0.tar.gz")"
+          octave-launch --no-gui --norc --silent --no-history --eval \
+            "pkg ('install', '-local', '-verbose', '$archive');"
+
+      - name: Test the test package
+        shell: bash
+        run: |
+          octave-launch --no-gui --norc --silent --no-history --eval \
+            "pkg load ciprobe; [n, nmax] = test ('ciprobe');
+             printf ('%d of %d tests passed\n', n, nmax);
+             if (nmax == 0 || n != nmax) exit (1); endif"
+
+  cached:
+    name: Install from the cache
+    needs: install
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Octave
+        uses: ./windows
+        with:
+          version: '11.3.0'
+
+      - name: Run Octave
+        shell: bash
+        run: |
+          octave-launch --no-gui --norc --silent --no-history \
+            --eval "version ()"

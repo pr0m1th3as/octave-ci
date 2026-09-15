@@ -1,0 +1,11 @@
+Name: ciprobe
+Version: 0.1.0
+Date: 2026-09-15
+Author: Andreas Bertsatos
+Maintainer: Andreas Bertsatos <abertsatos@biol.uoa.gr>
+Title: Test Package for octave-ci
+Description: A minimal package with one compiled function, used to check
+ that a package builds, installs and passes its tests with the Octave
+ installed by octave-ci.
+Categories: Testing
+Depends: octave (>= 11.1.0)
