@@ -19,8 +19,14 @@ jobs:
         with:
           version: '11.3.0'
       - shell: bash
-        run: octave-launch --no-gui --eval "pkg install -local ."
+        run: |
+          git archive --format=tar.gz --prefix=package/ -o package.tar.gz HEAD
+          archive="$(cygpath -w "$PWD/package.tar.gz")"
+          octave-launch --no-gui --eval "pkg ('install', '-local', '$archive')"
 ```
+
+`pkg install` takes a package archive, not a folder, so the example builds
+one from the checked-out commit first.
 
 The action:
 
