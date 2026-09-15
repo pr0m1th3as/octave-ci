@@ -1,0 +1,20 @@
+name: Package test workflow
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ciprobe:
+    uses: ./.github/workflows/package-test.yml
+    with:
+      path: tests/ciprobe

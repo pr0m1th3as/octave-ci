@@ -49,6 +49,49 @@ It puts `octave-launch.exe` on the path and returns its full path in the
 
 [r-11.3.0]: https://github.com/pr0m1th3as/octave-ci/releases/tag/octave-11.3.0
 
+## Package tests
+
+The reusable workflow `package-test.yml` builds, installs and tests an Octave
+package on Linux, Windows and macOS.  A package calls it from its own
+workflow:
+
+```yaml
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    uses: pr0m1th3as/octave-ci/.github/workflows/package-test.yml@v1
+```
+
+Each job builds an archive of the checked-out commit with `git archive`,
+installs the package's dependencies from Octave Packages, installs the
+package, runs `pkg test` and fails if no test passed, any test failed or any
+regression was reported.
+
+| Input | Default | Meaning |
+|-------|---------|---------|
+| `path` | `.` | Folder holding the package's `DESCRIPTION` |
+| `linux-versions` | `["11.1.0", "11.3.0"]` | Octave container versions |
+| `windows-version` | `11.3.0` | Octave for Windows; empty skips Windows |
+| `macos` | `true` | Test on macOS with Homebrew's Octave |
+| `dependencies` | empty | Packages to install first, separated by spaces |
+
+On Linux the job runs in the official `ghcr.io/gnu-octave/octave` container,
+on Windows it uses the `windows` action above, and on macOS it installs the
+latest Octave from Homebrew.
+
 ## The Octave archives
 
 Each release holds a Windows build of Octave exactly as GNU publishes it at

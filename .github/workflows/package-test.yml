@@ -1,0 +1,236 @@
+name: Package tests
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: 'Folder holding the package DESCRIPTION'
+        type: string
+        default: '.'
+      linux-versions:
+        description: 'JSON list of Octave container versions'
+        type: string
+        default: '["11.1.0", "11.3.0"]'
+      windows-version:
+        description: 'Octave for Windows version; empty skips Windows'
+        type: string
+        default: '11.3.0'
+      macos:
+        description: 'Test on macOS with Homebrew Octave'
+        type: boolean
+        default: true
+      dependencies:
+        description: 'Octave Packages to install first, separated by spaces'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux, Octave ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJSON(inputs.linux-versions) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the package archive
+        id: archive
+        shell: bash
+        env:
+          PKG_PATH: ${{ inputs.path }}
+        run: |
+          set -euo pipefail
+          tree=HEAD
+          if [ -n "$PKG_PATH" ] && [ "$PKG_PATH" != "." ]; then
+            tree="HEAD:${PKG_PATH%/}"
+          fi
+          git archive --format=tar.gz --prefix=package/ \
+            -o package.tar.gz "$tree"
+          name="$(tr -d '\r' < "$PKG_PATH/DESCRIPTION" \
+                  | sed -n 's/^Name: *//p' | tr '[:upper:]' '[:lower:]')"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Install and test in the Octave container
+        shell: bash
+        env:
+          VERSION: ${{ matrix.version }}
+          NAME: ${{ steps.archive.outputs.name }}
+          DEPENDENCIES: ${{ inputs.dependencies }}
+        run: |
+          set -euo pipefail
+          code=""
+          for dep in $DEPENDENCIES; do
+            code+="pkg ('install', '-forge', '-local', '$dep'); "
+          done
+          code+="pkg ('install', '-local', '/work/package.tar.gz'); "
+          code+="pkg ('load', '$NAME'); pkg ('test', '$NAME');"
+          docker run --rm --volume "$PWD:/work" --workdir /work \
+            "ghcr.io/gnu-octave/octave:$VERSION" \
+            octave-cli --norc --no-history --eval "$code" 2>&1 | tee test.log
+
+      - name: Check the test results
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary="$(tr -d '\r' < test.log | sed -n '/^Summary:$/,$p')"
+          count () {
+            printf '%s\n' "$summary" | sed -nE "s/^  $1 +([0-9]+)\$/\1/p"
+          }
+          pass="$(count PASS)"
+          fail="$(count FAIL)"
+          regr="$(count REGRESSION)"
+          if [ -z "$pass" ] || [ "$pass" -eq 0 ]; then
+            echo "::error::no test passed"
+            exit 1
+          fi
+          if [ "${fail:-1}" -ne 0 ] || [ "${regr:-0}" -ne 0 ]; then
+            echo "::error::${fail:-unknown} failed, ${regr:-0} regressions"
+            exit 1
+          fi
+          echo "$pass tests passed"
+
+  windows:
+    name: Windows, Octave ${{ inputs.windows-version }}
+    if: inputs.windows-version != ''
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Octave
+        uses: pr0m1th3as/octave-ci/windows@v1
+        with:
+          version: ${{ inputs.windows-version }}
+
+      - name: Build the package archive
+        id: archive
+        shell: bash
+        env:
+          PKG_PATH: ${{ inputs.path }}
+        run: |
+          set -euo pipefail
+          tree=HEAD
+          if [ -n "$PKG_PATH" ] && [ "$PKG_PATH" != "." ]; then
+            tree="HEAD:${PKG_PATH%/}"
+          fi
+          git archive --format=tar.gz --prefix=package/ \
+            -o package.tar.gz "$tree"
+          name="$(tr -d '\r' < "$PKG_PATH/DESCRIPTION" \
+                  | sed -n 's/^Name: *//p' | tr '[:upper:]' '[:lower:]')"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Install and test
+        shell: bash
+        env:
+          NAME: ${{ steps.archive.outputs.name }}
+          DEPENDENCIES: ${{ inputs.dependencies }}
+        run: |
+          set -euo pipefail
+          archive="$(cygpath -w "$PWD/package.tar.gz")"
+          code=""
+          for dep in $DEPENDENCIES; do
+            code+="pkg ('install', '-forge', '-local', '$dep'); "
+          done
+          code+="pkg ('install', '-local', '$archive'); "
+          code+="pkg ('load', '$NAME'); pkg ('test', '$NAME');"
+          octave-launch --no-gui --norc --silent --no-history --eval "$code" \
+            2>&1 | tee test.log
+
+      - name: Check the test results
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary="$(tr -d '\r' < test.log | sed -n '/^Summary:$/,$p')"
+          count () {
+            printf '%s\n' "$summary" | sed -nE "s/^  $1 +([0-9]+)\$/\1/p"
+          }
+          pass="$(count PASS)"
+          fail="$(count FAIL)"
+          regr="$(count REGRESSION)"
+          if [ -z "$pass" ] || [ "$pass" -eq 0 ]; then
+            echo "::error::no test passed"
+            exit 1
+          fi
+          if [ "${fail:-1}" -ne 0 ] || [ "${regr:-0}" -ne 0 ]; then
+            echo "::error::${fail:-unknown} failed, ${regr:-0} regressions"
+            exit 1
+          fi
+          echo "$pass tests passed"
+
+  macos:
+    name: macOS, Octave from Homebrew
+    if: inputs.macos
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Octave
+        shell: bash
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: |
+          set -euo pipefail
+          brew install octave
+          octave-cli --norc --no-history \
+            --eval "printf ('Octave %s\n', version ())"
+
+      - name: Build the package archive
+        id: archive
+        shell: bash
+        env:
+          PKG_PATH: ${{ inputs.path }}
+        run: |
+          set -euo pipefail
+          tree=HEAD
+          if [ -n "$PKG_PATH" ] && [ "$PKG_PATH" != "." ]; then
+            tree="HEAD:${PKG_PATH%/}"
+          fi
+          git archive --format=tar.gz --prefix=package/ \
+            -o package.tar.gz "$tree"
+          name="$(tr -d '\r' < "$PKG_PATH/DESCRIPTION" \
+                  | sed -n 's/^Name: *//p' | tr '[:upper:]' '[:lower:]')"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Install and test
+        shell: bash
+        env:
+          NAME: ${{ steps.archive.outputs.name }}
+          DEPENDENCIES: ${{ inputs.dependencies }}
+        run: |
+          set -euo pipefail
+          code=""
+          for dep in $DEPENDENCIES; do
+            code+="pkg ('install', '-forge', '-local', '$dep'); "
+          done
+          code+="pkg ('install', '-local', '$PWD/package.tar.gz'); "
+          code+="pkg ('load', '$NAME'); pkg ('test', '$NAME');"
+          octave-cli --norc --no-history --eval "$code" 2>&1 | tee test.log
+
+      - name: Check the test results
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary="$(tr -d '\r' < test.log | sed -n '/^Summary:$/,$p')"
+          count () {
+            printf '%s\n' "$summary" | sed -nE "s/^  $1 +([0-9]+)\$/\1/p"
+          }
+          pass="$(count PASS)"
+          fail="$(count FAIL)"
+          regr="$(count REGRESSION)"
+          if [ -z "$pass" ] || [ "$pass" -eq 0 ]; then
+            echo "::error::no test passed"
+            exit 1
+          fi
+          if [ "${fail:-1}" -ne 0 ] || [ "${regr:-0}" -ne 0 ]; then
+            echo "::error::${fail:-unknown} failed, ${regr:-0} regressions"
+            exit 1
+          fi
+          echo "$pass tests passed"
