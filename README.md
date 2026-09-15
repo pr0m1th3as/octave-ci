@@ -5,7 +5,7 @@ Continuous integration support for GNU Octave packages.
 ## Windows
 
 The `windows` action installs GNU Octave on a GitHub-hosted Windows runner,
-so a package can be built and tested there.  It removes the Octave Forge
+so a package can be built and tested there.  It leaves out the Octave Forge
 packages that come bundled with the Windows build of Octave, so that only
 the package under test is installed.
 
@@ -26,9 +26,11 @@ The action:
 
 1. downloads the Octave archive from a release of this repository, or
    restores it from the cache, and checks its SHA-256 checksum;
-2. extracts it to `C:\octave-ci`;
-3. deletes the bundled packages and their package list;
-4. stops the job if `pkg list` still finds any package.
+2. extracts it to `C:\octave-ci`, leaving out the bundled packages, their
+   package list, and the folders package tests never use: documentation,
+   CMake modules, Qt, LLVM and wxWidgets headers, and the MSYS Python and
+   terminfo;
+3. stops the job if `pkg list` still finds any package.
 
 It puts `octave-launch.exe` on the path and returns its full path in the
 `octave` output.
