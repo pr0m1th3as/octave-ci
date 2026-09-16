@@ -11,10 +11,10 @@ on:
         description: 'JSON list of Octave container versions'
         type: string
         default: '["11.1.0", "11.3.0"]'
-      windows-version:
-        description: 'Octave for Windows version; empty skips Windows'
+      windows-versions:
+        description: 'JSON list of them; empty or [] skips Windows'
         type: string
-        default: '11.3.0'
+        default: '["11.3.0"]'
       macos:
         description: 'Test on macOS with Homebrew Octave'
         type: boolean
@@ -139,17 +139,23 @@ jobs:
           echo "$pass tests passed"
 
   windows:
-    name: Windows, Octave ${{ inputs.windows-version }}
-    if: inputs.windows-version != ''
+    name: Windows, Octave ${{ matrix.version }}
+    if: inputs.windows-versions != '' && inputs.windows-versions != '[]'
     runs-on: windows-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        version: >-
+          ${{ fromJSON(inputs.windows-versions != '[]'
+          && inputs.windows-versions || '[""]') }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Octave
         uses: pr0m1th3as/octave-ci/windows@v1
         with:
-          version: ${{ inputs.windows-version }}
+          version: ${{ matrix.version }}
 
       - name: Build the package archive
         id: archive
@@ -223,7 +229,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-logs-windows-${{ inputs.windows-version }}
+          name: test-logs-windows-${{ matrix.version }}
           path: test-logs/
           if-no-files-found: ignore
           retention-days: 14

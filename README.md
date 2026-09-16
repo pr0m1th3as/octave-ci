@@ -87,7 +87,7 @@ toolchain is present and this repository's own tests use a package with a
 |-------|---------|---------|
 | `path` | `.` | The package's root, if not the repository's |
 | `linux-versions` | `["11.1.0", "11.3.0"]` | Container versions, JSON list |
-| `windows-version` | `11.3.0` | Octave for Windows; empty skips Windows |
+| `windows-versions` | `["11.3.0"]` | Windows versions; empty skips |
 | `macos` | `true` | Test on macOS with Homebrew's Octave |
 | `dependencies` | empty | Packages to install first, space separated |
 
@@ -104,7 +104,26 @@ jobs:
 ```
 
 `linux-versions` names tags of the `ghcr.io/gnu-octave/octave` container.
-`windows-version` names a release of this repository, listed below.
+`windows-versions` names releases of this repository, listed below.
+
+Both take a JSON list, so a package covers two releases of Octave at once:
+
+```yaml
+    with:
+      linux-versions: '["11.1.0", "12.1.0"]'
+      windows-versions: '["11.3.0", "12.1.0"]'
+```
+
+One job runs per entry and the jobs are independent, so one failing does not
+cancel the others.  A single version is a list of one, `'["11.3.0"]'`; the
+brackets and the inner quotes are part of it.  An empty `windows-versions`,
+or `'[]'`, skips Windows; Linux cannot be skipped.  Naming a version twice
+gives two identical jobs, which then collide uploading their logs, since the
+artifact is named after the version.
+
+macOS has no such input.  Homebrew carries one Octave formula and no
+versioned ones, so the macOS job tests whatever version Homebrew currently
+ships and cannot be asked for another.
 
 `path` is left alone when the repository is the package, which is the usual
 case.  It names the package's own root folder, for a repository that holds
@@ -146,7 +165,7 @@ so one platform failing does not cancel the others.
 | Platform | Octave | How |
 |----------|--------|-----|
 | Linux | one job per `linux-versions` entry | Octave container |
-| Windows | `windows-version` | the `windows` action below |
+| Windows | one job per `windows-versions` entry | the `windows` action |
 | macOS | current | `brew install octave` |
 
 ## Checking a run
