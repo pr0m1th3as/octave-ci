@@ -82,16 +82,22 @@ toolchain is present and this repository's own tests use a package with a
 `.cc` file to prove it.
 
 ## Inputs
+The following table list the available input arguments to the CI along with
+their defaults, which are written above exactly as a caller writes them.
 
 | Input | Default | Meaning |
 |-------|---------|---------|
-| `path` | `.` | The package's root, if not the repository's |
-| `linux-versions` | `["11.1.0", "11.3.0"]` | Container versions, JSON list |
-| `windows-versions` | `["11.3.0"]` | Windows versions; empty skips |
+| `path` | `'.'` | The package's root, if not the repository's |
+| `linux-versions` | `'["11.1.0", "11.3.0"]'` | Test on Linux with these Octave containers |
+| `windows-versions` | `'["11.1.0", "11.3.0"]'` | Test on Windows with these Octave builds |
 | `macos` | `true` | Test on macOS with Homebrew's Octave |
-| `dependencies` | empty | Packages to install first, space separated |
+| `dependencies` | `''` | Packages to install first, space separated |
 
-A package that requires a newer Octave than 11.1.0, and that does not want
+ * `linux-versions` names tags of the `ghcr.io/gnu-octave/octave` container.
+ * `windows-versions` names releases of this repository.
+ * `macos` always runs on whichever Octave version Homebrew currently ships.
+
+A package that requires testing a specific Octave on Linux and does not want
 the macOS job:
 
 ```yaml
@@ -103,27 +109,18 @@ jobs:
       macos: false
 ```
 
-`linux-versions` names tags of the `ghcr.io/gnu-octave/octave` container.
-`windows-versions` names releases of this repository, listed below.
+Note that with the above example, both `"11.1.0"` and `"11.3.0"` Octave
+versions are deployed on the Windows runners
 
-Both take a JSON list, so a package covers two releases of Octave at once:
+Windows is the platform that can be turned off, with an empty list:
 
 ```yaml
     with:
-      linux-versions: '["11.1.0", "12.1.0"]'
-      windows-versions: '["11.3.0", "12.1.0"]'
+      windows-versions: '[]'
 ```
 
-One job runs per entry and the jobs are independent, so one failing does not
-cancel the others.  A single version is a list of one, `'["11.3.0"]'`; the
-brackets and the inner quotes are part of it.  An empty `windows-versions`,
-or `'[]'`, skips Windows; Linux cannot be skipped.  Naming a version twice
-gives two identical jobs, which then collide uploading their logs, since the
-artifact is named after the version.
-
-macOS has no such input.  Homebrew carries one Octave formula and no
-versioned ones, so the macOS job tests whatever version Homebrew currently
-ships and cannot be asked for another.
+Linux cannot be turned off.  An empty `linux-versions` is an error rather
+than a run with no Linux jobs, so a typo there cannot pass for a green run.
 
 `path` is left alone when the repository is the package, which is the usual
 case.  It names the package's own root folder, for a repository that holds
@@ -286,8 +283,10 @@ It puts `octave-launch.exe` on the path and returns its full path in the
 
 | Version | Release |
 |---------|---------|
+| 11.1.0  | [`octave-11.1.0`][r-11.1.0] |
 | 11.3.0  | [`octave-11.3.0`][r-11.3.0] |
 
+[r-11.1.0]: https://github.com/pr0m1th3as/octave-ci/releases/tag/octave-11.1.0
 [r-11.3.0]: https://github.com/pr0m1th3as/octave-ci/releases/tag/octave-11.3.0
 
 ## The Octave archives
@@ -304,11 +303,16 @@ gpgv --keyring ./gnu-keyring.gpg octave-11.3.0-w64.7z.sig octave-11.3.0-w64.7z
 GNU Octave and the software distributed with it are free software.  The
 source code for each archive is available from:
 
+- GNU Octave 11.1.0:
+  <https://ftp.gnu.org/gnu/octave/octave-11.1.0.tar.xz>, built by MXE Octave
+  at revision `daf53bace29b`:
+  <https://hg.octave.org/mxe-octave/rev/daf53bace29b>
 - GNU Octave 11.3.0:
-  <https://ftp.gnu.org/gnu/octave/octave-11.3.0.tar.xz>
-- MXE Octave, which built the Windows archive, at revision `8837c9048e1a`
-  (recorded in the archive's `HG-ID` file):
+  <https://ftp.gnu.org/gnu/octave/octave-11.3.0.tar.xz>, built by MXE Octave
+  at revision `8837c9048e1a`:
   <https://hg.octave.org/mxe-octave/rev/8837c9048e1a>
+
+Each revision is recorded in its archive's `HG-ID` file.
 
 ## This repository's own tests
 

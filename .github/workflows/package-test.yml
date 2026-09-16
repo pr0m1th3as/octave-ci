@@ -14,7 +14,7 @@ on:
       windows-versions:
         description: 'JSON list of them; empty or [] skips Windows'
         type: string
-        default: '["11.3.0"]'
+        default: '["11.1.0", "11.3.0"]'
       macos:
         description: 'Test on macOS with Homebrew Octave'
         type: boolean
