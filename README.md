@@ -107,7 +107,8 @@ their defaults, which are written above exactly as a caller writes them.
    change.
  * `warning-platforms` holds any of `linux`, `windows` and `macos`.  All
    three are available and the default gates Linux alone, because that is
-   the one whose compiler is pinned; the rest is the maintainer's call.
+   the one whose compiler is pinned; the rest is the maintainer's call.  An
+   empty list skips the job, as `windows-versions` does.
  * `warning-linux-version` names a tag of the same container as
    `linux-versions`, and `warning-windows-version` a release of this
    repository, as `windows-versions` does.  macOS has no version: Homebrew

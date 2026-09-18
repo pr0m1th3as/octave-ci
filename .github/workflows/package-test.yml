@@ -160,7 +160,7 @@ jobs:
 
   warnings:
     name: Warnings, ${{ matrix.platform }}
-    if: inputs.warning-flags != ''
+    if: inputs.warning-flags != '' && inputs.warning-platforms != '[]'
     runs-on: >-
       ${{ matrix.platform == 'windows' && 'windows-latest'
       || (matrix.platform == 'macos' && 'macos-15' || 'ubuntu-latest') }}
@@ -168,7 +168,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(inputs.warning-platforms) }}
+        platform: >-
+          ${{ fromJSON(inputs.warning-platforms != '[]'
+          && inputs.warning-platforms || '[""]') }}
     steps:
       - uses: actions/checkout@v7
 
