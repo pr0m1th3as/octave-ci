@@ -35,3 +35,41 @@ jobs:
       warning-flags: '-O2 -Wall -Wextra'
       warning-platforms: '["linux", "windows", "macos"]'
       warning-exclude: '__ciwarn__\.cc:'
+
+  # A green warnings job proves nothing on its own: had the flags never
+  # reached the compiler there would be no warning, nothing to exclude and
+  # the job would pass having checked nothing.  So assert that each
+  # platform's build log really holds the warning the fixture plants.
+  ciwarn-planted:
+    name: Warning reached the log
+    needs: ciwarn
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the build logs
+        uses: actions/download-artifact@v7
+        with:
+          pattern: build-log-warnings-ciwarn-*
+          path: build-logs
+
+      - name: Check every platform warned
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for platform in linux windows macos; do
+            log="build-logs/build-log-warnings-ciwarn-$platform/build.log"
+            if [ ! -f "$log" ]; then
+              echo "::error::no build log for $platform"
+              missing=1
+              continue
+            fi
+            if tr -d '\r' < "$log" \
+               | grep -qE '__ciwarn__\.cc:.*warning:.*unused variable'; then
+              echo "$platform: the planted warning reached the log"
+            else
+              echo "::error::$platform built without the planted warning, so"\
+                   "the flags did not reach the compiler"
+              missing=1
+            fi
+          done
+          exit "$missing"

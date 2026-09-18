@@ -114,8 +114,9 @@ their defaults, which are written above exactly as a caller writes them.
    repository, as `windows-versions` does.  macOS has no version: Homebrew
    ships what it ships.
  * `warning-exclude` is matched against each warning line with `grep -vE`.
-   A pattern that filters nothing fails the job, so an exclude cannot
-   outlive the warnings it was written for.
+   A pattern that filters nothing is reported and the job carries on, since
+   that is the ordinary state on a platform whose compiler does not raise
+   what the pattern was written for.
 
 A package that requires testing a specific Octave on Linux and does not want
 the macOS job:
@@ -196,9 +197,9 @@ fails if the compiler wrote any warning at all.  It does not run `pkg test`,
 which the platform jobs already do.  Dependencies are installed before the
 flags are set, so a package is gated on its own sources and not on those of
 the packages it needs.  The build output is uploaded as
-`build-log-warnings-<platform>` whether the job passed or failed, and every
-warning is printed into the step, so a failure reads without downloading
-anything.
+`build-log-warnings-<package>-<platform>` whether the job passed or failed,
+and every warning is printed into the step, so a failure reads without
+downloading anything.
 
 The default is Linux alone, and the reason is worth knowing before turning
 the others on.  The Linux container is a fixed tag, so its compiler moves
@@ -234,9 +235,11 @@ A package whose bundled sources warn can still gate the rest of the tree with
       warning-exclude: 'thirdparty/|vendor/'
 ```
 
-The job fails if that pattern matches nothing, which keeps the exclude
-honest: once the warnings it covered are fixed, the run says so instead of
-carrying a line that no longer does anything.
+A pattern that matches nothing is inert rather than unsafe, because a
+warning it does not cover still fails the job, so the run reports it and
+carries on.  That also lets one pattern serve every platform: a warning only
+the Windows compiler raises needs no second input, and the platforms that
+never see it are not failed for not needing the exclusion.
 
 ## Platforms
 
@@ -304,7 +307,7 @@ Give `--dir` a name of its own; some versions of `gh` refuse `--dir .` with
 a path traversal error.  The artifact names are
 `test-logs-linux-<version>`, `test-logs-windows-<version>`,
 `test-logs-macos` and, where the warnings job runs,
-`build-log-warnings-<platform>`.
+`build-log-warnings-<package>-<platform>`.
 
 Each folder holds two files:
 
@@ -411,12 +414,17 @@ and is expected to be silent, which is the state every adopting package
 wants to be in.  `ciwarn`'s oct-file holds a variable that is never read, so
 the same flags produce one warning, and its caller excludes it by file name.
 A green `ciwarn` therefore means the flags reached the compiler, the warning
-was written, the log kept it and the exclude filtered it: every step of the
-chain but the final `exit 1`, and any break in it turns the dead-exclude
-rule red.  It gates all three platforms, since that is the only way to know
-the chain holds on each compiler rather than on the one it was written
-against.  The warning is invisible to the platform jobs, which build with
-Octave's own flags, so nothing else sees it.
+was written and the log kept it.  It gates all three platforms, since that
+is the only way to know the chain holds on each compiler rather than on the
+one it was written against.  The warning is invisible to the platform jobs,
+which build with Octave's own flags, so nothing else sees it.
+
+A green warnings job does not prove that on its own: had the flags never
+reached the compiler there would be no warning, nothing to exclude, and the
+job would pass having checked nothing.  The `ciwarn-planted` job closes
+that.  It runs after `ciwarn`, downloads each platform's build log and fails
+unless the planted warning is in all three.  The guarantee lives here rather
+than in `package-test.yml` so that packages carry none of it.
 
 The `v1` tag moves only to a commit whose self-tests are green.
 

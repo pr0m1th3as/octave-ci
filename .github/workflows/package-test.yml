@@ -272,7 +272,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: build-log-warnings-${{ matrix.platform }}
+          name: build-log-warnings-${{ steps.archive.outputs.name }}-${{ matrix.platform }}
           path: build.log
           if-no-files-found: ignore
           retention-days: 14
@@ -289,13 +289,15 @@ jobs:
             found="$(printf '%s\n' "$all" | grep -vE "$EXCLUDE" || true)"
             before="$(printf '%s' "$all" | grep -c . || true)"
             after="$(printf '%s' "$found" | grep -c . || true)"
-            # An exclude that filters nothing is dead configuration: either
-            # the pattern is wrong or the warnings it covered are gone.
+            # An exclude that filters nothing is inert rather than unsafe:
+            # a warning it does not match still fails the job below.  It is
+            # also the normal state on a platform whose compiler does not
+            # raise what the pattern was written for, so say so and carry on.
             if [ "$before" -eq "$after" ]; then
-              echo "::error::warning-exclude matched nothing; fix or drop it"
-              exit 1
+              echo "::warning::warning-exclude matched nothing here: $EXCLUDE"
+            else
+              echo "excluded $((before - after)) warning(s)"
             fi
-            echo "excluded $((before - after)) warning(s)"
           fi
           count="$(printf '%s' "$found" | grep -c . || true)"
           if [ "$count" -ne 0 ]; then
