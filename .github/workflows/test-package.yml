@@ -19,3 +19,19 @@ jobs:
     with:
       path: tests/ciprobe
       windows-versions: '["11.1.0", "11.3.0"]'
+      warning-flags: '-O2 -Wall -Wextra'
+
+  # The warning fixture: its oct-file warns on purpose, so a green run means
+  # the flags reached the compiler, the warning was captured and the exclude
+  # filtered it.  All three platforms, because that is the only way to know
+  # the chain holds on each of them; one test job is enough beside it.
+  ciwarn:
+    uses: ./.github/workflows/package-test.yml
+    with:
+      path: tests/ciwarn
+      linux-versions: '["11.3.0"]'
+      windows-versions: '[]'
+      macos: false
+      warning-flags: '-O2 -Wall -Wextra'
+      warning-platforms: '["linux", "windows", "macos"]'
+      warning-exclude: '__ciwarn__\.cc:'

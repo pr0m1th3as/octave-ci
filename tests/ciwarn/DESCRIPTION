@@ -1,0 +1,11 @@
+Name: ciwarn
+Version: 0.1.0
+Date: 2026-09-18
+Author: Andreas Bertsatos
+Maintainer: Andreas Bertsatos <abertsatos@biol.uoa.gr>
+Title: Warning Fixture for octave-ci
+Description: A minimal package whose compiled function warns on purpose, used
+ to check that the warnings job builds with the flags it was given, captures
+ what the compiler wrote and filters it with warning-exclude.
+Categories: Testing
+Depends: octave (>= 11.1.0)

@@ -92,10 +92,29 @@ their defaults, which are written above exactly as a caller writes them.
 | `windows-versions` | `'["11.1.0", "11.3.0"]'` | Test on Windows with these Octave builds |
 | `macos` | `true` | Test on macOS with Homebrew's Octave |
 | `dependencies` | `''` | Packages to install first, space separated |
+| `warning-flags` | `''` | Compiler flags for the warnings jobs; empty skips them |
+| `warning-platforms` | `'["linux"]'` | Which platforms to gate on warnings |
+| `warning-linux-version` | `'11.3.0'` | Octave container the Linux warnings job builds under |
+| `warning-windows-version` | `'11.3.0'` | Octave release the Windows warnings job builds under |
+| `warning-exclude` | `''` | Warning lines to ignore, as an extended regexp |
 
  * `linux-versions` names tags of the `ghcr.io/gnu-octave/octave` container.
  * `windows-versions` names releases of this repository.
  * `macos` always runs on whichever Octave version Homebrew currently ships.
+ * `warning-flags` replaces the flags `mkoctfile` compiles with, so it carries
+   the optimisation level as well as the warnings.  Naming it turns the
+   warnings job on; leaving it empty is why every other package sees no
+   change.
+ * `warning-platforms` holds any of `linux`, `windows` and `macos`.  All
+   three are available and the default gates Linux alone, because that is
+   the one whose compiler is pinned; the rest is the maintainer's call.
+ * `warning-linux-version` names a tag of the same container as
+   `linux-versions`, and `warning-windows-version` a release of this
+   repository, as `windows-versions` does.  macOS has no version: Homebrew
+   ships what it ships.
+ * `warning-exclude` is matched against each warning line with `grep -vE`.
+   A pattern that filters nothing fails the job, so an exclude cannot
+   outlive the warnings it was written for.
 
 A package that requires testing a specific Octave on Linux and does not want
 the macOS job:
@@ -156,6 +175,67 @@ trusting the exit status.
 The artifacts are named `test-logs-linux-<version>`,
 `test-logs-windows-<version>` and `test-logs-macos`.  Jobs are independent,
 so one platform failing does not cancel the others.
+
+### The warnings job
+
+A package with compiled sources can also gate its build on compiler
+warnings.  The job stays off until `warning-flags` names the flags to build
+with:
+
+```yaml
+jobs:
+  test:
+    uses: pr0m1th3as/octave-ci/.github/workflows/package-test.yml@v1
+    with:
+      warning-flags: '-O2 -Wall -Wextra'
+```
+
+It builds the package once per platform named in `warning-platforms` and
+fails if the compiler wrote any warning at all.  It does not run `pkg test`,
+which the platform jobs already do.  Dependencies are installed before the
+flags are set, so a package is gated on its own sources and not on those of
+the packages it needs.  The build output is uploaded as
+`build-log-warnings-<platform>` whether the job passed or failed, and every
+warning is printed into the step, so a failure reads without downloading
+anything.
+
+The default is Linux alone, and the reason is worth knowing before turning
+the others on.  The Linux container is a fixed tag, so its compiler moves
+only when that image is rebuilt, while Homebrew ships whichever Octave and
+clang it currently has, so a macOS gate can turn red on a day nobody pushed.
+Windows sits in between: it is pinned to a release of this repository, and
+its compiler has a different data model, `long` being 32 bits under mingw,
+so it sees things the other two do not.  A maintainer who wants the wider
+coverage names the platforms:
+
+```yaml
+    with:
+      warning-flags: '-O2 -Wall'
+      warning-platforms: '["linux", "windows"]'
+```
+
+Each platform is a separate compiler with its own idea of what is worth
+warning about, so a package gated on more than one satisfies all of them at
+once, and a single `warning-exclude` has to cover every set.
+
+`mkoctfile` compiles with the flags the Octave it belongs to was built with,
+and those commonly carry no warning options at all, while a distribution's
+Octave adds its own set.  A package can therefore build silently everywhere
+its maintainer looks and warn on every user's machine.  This job is how that
+difference is caught first.
+
+A package whose bundled sources warn can still gate the rest of the tree with
+`warning-exclude`:
+
+```yaml
+    with:
+      warning-flags: '-O2 -Wall'
+      warning-exclude: 'thirdparty/|vendor/'
+```
+
+The job fails if that pattern matches nothing, which keeps the exclude
+honest: once the warnings it covered are fixed, the run says so instead of
+carrying a line that no longer does anything.
 
 ## Platforms
 
@@ -221,8 +301,9 @@ gh run download <run-id> --name test-logs-linux-11.3.0 --dir ci-logs
 
 Give `--dir` a name of its own; some versions of `gh` refuse `--dir .` with
 a path traversal error.  The artifact names are
-`test-logs-linux-<version>`, `test-logs-windows-<version>` and
-`test-logs-macos`.
+`test-logs-linux-<version>`, `test-logs-windows-<version>`,
+`test-logs-macos` and, where the warnings job runs,
+`build-log-warnings-<platform>`.
 
 Each folder holds two files:
 
@@ -321,6 +402,20 @@ tested by the workflows here.  It has a `DESCRIPTION`, a function with
 tests, and a `.cc` file, so a run of `test-package.yml` proves the whole
 path on every platform, compilation included, without depending on a real
 package.  `test-windows.yml` tests the Windows action by itself.
+
+`tests/ciwarn` is the fixture for the warnings job, and it is a second
+package rather than a second file in `ciprobe` because the two demonstrate
+opposite cases.  `ciprobe` is gated at `-O2 -Wall -Wextra` with no exclude
+and is expected to be silent, which is the state every adopting package
+wants to be in.  `ciwarn`'s oct-file holds a variable that is never read, so
+the same flags produce one warning, and its caller excludes it by file name.
+A green `ciwarn` therefore means the flags reached the compiler, the warning
+was written, the log kept it and the exclude filtered it: every step of the
+chain but the final `exit 1`, and any break in it turns the dead-exclude
+rule red.  It gates all three platforms, since that is the only way to know
+the chain holds on each compiler rather than on the one it was written
+against.  The warning is invisible to the platform jobs, which build with
+Octave's own flags, so nothing else sees it.
 
 The `v1` tag moves only to a commit whose self-tests are green.
 

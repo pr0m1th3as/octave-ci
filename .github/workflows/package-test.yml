@@ -23,6 +23,26 @@ on:
         description: 'Octave Packages to install first, separated by spaces'
         type: string
         default: ''
+      warning-flags:
+        description: 'Compiler flags for the warnings jobs; empty skips them'
+        type: string
+        default: ''
+      warning-platforms:
+        description: 'JSON list of linux, windows, macos to gate on warnings'
+        type: string
+        default: '["linux"]'
+      warning-linux-version:
+        description: 'Octave container the Linux warnings job builds under'
+        type: string
+        default: '11.3.0'
+      warning-windows-version:
+        description: 'Octave release the Windows warnings job builds under'
+        type: string
+        default: '11.3.0'
+      warning-exclude:
+        description: 'Extended regexp of warning lines to ignore'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -137,6 +157,151 @@ jobs:
             exit 1
           fi
           echo "$pass tests passed"
+
+  warnings:
+    name: Warnings, ${{ matrix.platform }}
+    if: inputs.warning-flags != ''
+    runs-on: >-
+      ${{ matrix.platform == 'windows' && 'windows-latest'
+      || (matrix.platform == 'macos' && 'macos-15' || 'ubuntu-latest') }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.warning-platforms) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Octave (Windows)
+        if: matrix.platform == 'windows'
+        uses: pr0m1th3as/octave-ci/windows@v1
+        with:
+          version: ${{ inputs.warning-windows-version }}
+
+      - name: Install Octave (macOS)
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: |
+          set -euo pipefail
+          brew install octave
+
+      - name: Build the package archive
+        id: archive
+        shell: bash
+        env:
+          PKG_PATH: ${{ inputs.path }}
+        run: |
+          set -euo pipefail
+          tree=HEAD
+          if [ -n "$PKG_PATH" ] && [ "$PKG_PATH" != "." ]; then
+            tree="HEAD:${PKG_PATH%/}"
+          fi
+          git archive --format=tar.gz --prefix=package/ \
+            -o package.tar.gz "$tree"
+          name="$(tr -d '\r' < "$PKG_PATH/DESCRIPTION" \
+                  | sed -n 's/^Name: *//p' | tr '[:upper:]' '[:lower:]')"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      # Dependencies build under the platform's own flags: only the package
+      # under test is gated.  'setenv' reaches 'mkoctfile' because 'make'
+      # inherits the interpreter's environment, and the compiler writes its
+      # warnings to stderr, which 'pkg install' passes through rather than
+      # capturing.
+      - name: Build with warnings enabled (Linux)
+        if: matrix.platform == 'linux'
+        shell: bash
+        env:
+          VERSION: ${{ inputs.warning-linux-version }}
+          DEPENDENCIES: ${{ inputs.dependencies }}
+          FLAGS: ${{ inputs.warning-flags }}
+        run: |
+          set -euo pipefail
+          code=""
+          for dep in $DEPENDENCIES; do
+            code+="pkg ('install', '-forge', '-local', '$dep'); "
+          done
+          code+="setenv ('CFLAGS', '$FLAGS'); "
+          code+="setenv ('CXXFLAGS', '$FLAGS'); "
+          code+="pkg ('install', '-local', '/work/package.tar.gz');"
+          docker run --rm --volume "$PWD:/work" --workdir /work \
+            "ghcr.io/gnu-octave/octave:$VERSION" \
+            octave-cli --norc --no-history --eval "$code" 2>&1 | tee build.log
+
+      - name: Build with warnings enabled (Windows)
+        if: matrix.platform == 'windows'
+        shell: bash
+        env:
+          DEPENDENCIES: ${{ inputs.dependencies }}
+          FLAGS: ${{ inputs.warning-flags }}
+        run: |
+          set -euo pipefail
+          archive="$(cygpath -w "$PWD/package.tar.gz")"
+          code=""
+          for dep in $DEPENDENCIES; do
+            code+="pkg ('install', '-forge', '-local', '$dep'); "
+          done
+          code+="setenv ('CFLAGS', '$FLAGS'); "
+          code+="setenv ('CXXFLAGS', '$FLAGS'); "
+          code+="pkg ('install', '-local', '$archive');"
+          octave-launch --no-gui --norc --silent --no-history --eval "$code" \
+            2>&1 | tee build.log
+
+      - name: Build with warnings enabled (macOS)
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          DEPENDENCIES: ${{ inputs.dependencies }}
+          FLAGS: ${{ inputs.warning-flags }}
+        run: |
+          set -euo pipefail
+          code=""
+          for dep in $DEPENDENCIES; do
+            code+="pkg ('install', '-forge', '-local', '$dep'); "
+          done
+          code+="setenv ('CFLAGS', '$FLAGS'); "
+          code+="setenv ('CXXFLAGS', '$FLAGS'); "
+          code+="pkg ('install', '-local', '$PWD/package.tar.gz');"
+          octave-cli --norc --no-history --eval "$code" 2>&1 | tee build.log
+
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-log-warnings-${{ matrix.platform }}
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Check for compiler warnings
+        shell: bash
+        env:
+          EXCLUDE: ${{ inputs.warning-exclude }}
+        run: |
+          set -euo pipefail
+          all="$(tr -d '\r' < build.log | grep -E 'warning:' || true)"
+          found="$all"
+          if [ -n "$EXCLUDE" ]; then
+            found="$(printf '%s\n' "$all" | grep -vE "$EXCLUDE" || true)"
+            before="$(printf '%s' "$all" | grep -c . || true)"
+            after="$(printf '%s' "$found" | grep -c . || true)"
+            # An exclude that filters nothing is dead configuration: either
+            # the pattern is wrong or the warnings it covered are gone.
+            if [ "$before" -eq "$after" ]; then
+              echo "::error::warning-exclude matched nothing; fix or drop it"
+              exit 1
+            fi
+            echo "excluded $((before - after)) warning(s)"
+          fi
+          count="$(printf '%s' "$found" | grep -c . || true)"
+          if [ "$count" -ne 0 ]; then
+            printf '%s\n' "$found"
+            echo "::error::$count compiler warning(s); see the build log"
+            exit 1
+          fi
+          echo "no compiler warnings"
 
   windows:
     name: Windows, Octave ${{ matrix.version }}
