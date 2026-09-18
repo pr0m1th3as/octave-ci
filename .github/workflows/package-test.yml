@@ -225,6 +225,7 @@ jobs:
           for dep in $DEPENDENCIES; do
             code+="pkg ('install', '-forge', '-local', '$dep'); "
           done
+          code+="printf ('%s\\n', '--- package build starts here ---'); "
           code+="setenv ('CFLAGS', '$FLAGS'); "
           code+="setenv ('CXXFLAGS', '$FLAGS'); "
           code+="pkg ('install', '-local', '/work/package.tar.gz');"
@@ -245,6 +246,7 @@ jobs:
           for dep in $DEPENDENCIES; do
             code+="pkg ('install', '-forge', '-local', '$dep'); "
           done
+          code+="printf ('%s\\n', '--- package build starts here ---'); "
           code+="setenv ('CFLAGS', '$FLAGS'); "
           code+="setenv ('CXXFLAGS', '$FLAGS'); "
           code+="pkg ('install', '-local', '$archive');"
@@ -263,6 +265,7 @@ jobs:
           for dep in $DEPENDENCIES; do
             code+="pkg ('install', '-forge', '-local', '$dep'); "
           done
+          code+="printf ('%s\\n', '--- package build starts here ---'); "
           code+="setenv ('CFLAGS', '$FLAGS'); "
           code+="setenv ('CXXFLAGS', '$FLAGS'); "
           code+="pkg ('install', '-local', '$PWD/package.tar.gz');"
@@ -283,7 +286,16 @@ jobs:
           EXCLUDE: ${{ inputs.warning-exclude }}
         run: |
           set -euo pipefail
-          all="$(tr -d '\r' < build.log | grep -E 'warning:' || true)"
+          # A dependency builds before the marker, under the platform's own
+          # flags, and the container's Octave may pass warning options of its
+          # own.  Only the package under test is gated, so read past it.
+          mark='--- package build starts here ---'
+          own="$(tr -d '\r' < build.log | sed -n "/$mark/,\$p")"
+          if [ -z "$own" ]; then
+            echo "::error::marker not found; the package build did not start"
+            exit 1
+          fi
+          all="$(printf '%s\n' "$own" | grep -E 'warning:' || true)"
           found="$all"
           if [ -n "$EXCLUDE" ]; then
             found="$(printf '%s\n' "$all" | grep -vE "$EXCLUDE" || true)"

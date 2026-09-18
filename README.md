@@ -194,9 +194,12 @@ jobs:
 
 It builds the package once per platform named in `warning-platforms` and
 fails if the compiler wrote any warning at all.  It does not run `pkg test`,
-which the platform jobs already do.  Dependencies are installed before the
-flags are set, so a package is gated on its own sources and not on those of
-the packages it needs.  The build output is uploaded as
+which the platform jobs already do.  Dependencies are installed first, under
+the platform's own flags, and the job reads the build log only from the
+point the package itself starts building, so a package is gated on its own
+sources and never on those of the packages it needs.  That second half
+matters: an Octave may pass warning options of its own, in which case a
+dependency warns while it builds.  The build output is uploaded as
 `build-log-warnings-<package>-<platform>` whether the job passed or failed,
 and every warning is printed into the step, so a failure reads without
 downloading anything.
