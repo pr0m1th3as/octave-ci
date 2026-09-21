@@ -86,7 +86,11 @@ jobs:
           set -euo pipefail
           code=""
           for dep in $DEPENDENCIES; do
-            code+="pkg ('install', '-forge', '-local', '$dep'); "
+            code+="for a = 1:3; try; "
+            code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
+            code+="if (a == 3); error ('$dep could not be installed'); endif; "
+            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="pkg ('install', '-local', '/work/package.tar.gz'); "
           code+="pkg ('load', '$NAME'); pkg ('test', '$NAME');"
@@ -223,7 +227,11 @@ jobs:
           set -euo pipefail
           code=""
           for dep in $DEPENDENCIES; do
-            code+="pkg ('install', '-forge', '-local', '$dep'); "
+            code+="for a = 1:3; try; "
+            code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
+            code+="if (a == 3); error ('$dep could not be installed'); endif; "
+            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="printf ('%s\\n', '--- package build starts here ---'); "
           code+="setenv ('CFLAGS', '$FLAGS'); "
@@ -244,7 +252,11 @@ jobs:
           archive="$(cygpath -w "$PWD/package.tar.gz")"
           code=""
           for dep in $DEPENDENCIES; do
-            code+="pkg ('install', '-forge', '-local', '$dep'); "
+            code+="for a = 1:3; try; "
+            code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
+            code+="if (a == 3); error ('$dep could not be installed'); endif; "
+            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="printf ('%s\\n', '--- package build starts here ---'); "
           code+="setenv ('CFLAGS', '$FLAGS'); "
@@ -263,7 +275,11 @@ jobs:
           set -euo pipefail
           code=""
           for dep in $DEPENDENCIES; do
-            code+="pkg ('install', '-forge', '-local', '$dep'); "
+            code+="for a = 1:3; try; "
+            code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
+            code+="if (a == 3); error ('$dep could not be installed'); endif; "
+            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="printf ('%s\\n', '--- package build starts here ---'); "
           code+="setenv ('CFLAGS', '$FLAGS'); "
@@ -365,7 +381,11 @@ jobs:
           archive="$(cygpath -w "$PWD/package.tar.gz")"
           code=""
           for dep in $DEPENDENCIES; do
-            code+="pkg ('install', '-forge', '-local', '$dep'); "
+            code+="for a = 1:3; try; "
+            code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
+            code+="if (a == 3); error ('$dep could not be installed'); endif; "
+            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="pkg ('install', '-local', '$archive'); "
           code+="pkg ('load', '$NAME'); pkg ('test', '$NAME');"
@@ -481,7 +501,11 @@ jobs:
           set -euo pipefail
           code=""
           for dep in $DEPENDENCIES; do
-            code+="pkg ('install', '-forge', '-local', '$dep'); "
+            code+="for a = 1:3; try; "
+            code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
+            code+="if (a == 3); error ('$dep could not be installed'); endif; "
+            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="pkg ('install', '-local', '$PWD/package.tar.gz'); "
           code+="pkg ('load', '$NAME'); pkg ('test', '$NAME');"
