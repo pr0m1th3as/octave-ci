@@ -105,8 +105,12 @@ jobs:
           set -euo pipefail
           mkdir -p test-logs
           see='s/^See the file (.*) for additional details\.$/\1/p'
-          log="$(tr -d '\r' < test.log 2>/dev/null | sed -nE "$see" \
-                 | tail -1 | sed 's#.*[\\/]##')"
+          # No log where the job stopped before the tests ran
+          log=""
+          if [ -f test.log ]; then
+            log="$(tr -d '\r' < test.log | sed -nE "$see" \
+                   | tail -1 | sed 's#.*[\\/]##')"
+          fi
           for f in "$log" test_suite.log fntests.log; do
             if [ -n "$f" ] && [ -f "$f" ]; then
               cp "$f" test-logs/
@@ -399,8 +403,12 @@ jobs:
           set -euo pipefail
           mkdir -p test-logs
           see='s/^See the file (.*) for additional details\.$/\1/p'
-          log="$(tr -d '\r' < test.log 2>/dev/null | sed -nE "$see" \
-                 | tail -1 | sed 's#.*[\\/]##')"
+          # No log where the job stopped before the tests ran
+          log=""
+          if [ -f test.log ]; then
+            log="$(tr -d '\r' < test.log | sed -nE "$see" \
+                   | tail -1 | sed 's#.*[\\/]##')"
+          fi
           for f in "$log" test_suite.log fntests.log; do
             if [ -n "$f" ] && [ -f "$f" ]; then
               cp "$f" test-logs/
@@ -518,8 +526,12 @@ jobs:
           set -euo pipefail
           mkdir -p test-logs
           see='s/^See the file (.*) for additional details\.$/\1/p'
-          log="$(tr -d '\r' < test.log 2>/dev/null | sed -nE "$see" \
-                 | tail -1 | sed 's#.*[\\/]##')"
+          # No log where the job stopped before the tests ran
+          log=""
+          if [ -f test.log ]; then
+            log="$(tr -d '\r' < test.log | sed -nE "$see" \
+                   | tail -1 | sed 's#.*[\\/]##')"
+          fi
           for f in "$log" test_suite.log fntests.log; do
             if [ -n "$f" ] && [ -f "$f" ]; then
               cp "$f" test-logs/
