@@ -59,7 +59,8 @@ jobs:
           }
           EOF
               g++ -O2 -I/usr/local/include/opencascade box.cxx -o box \
-                -lTKernel -lTKMath -lTKG3d -lTKBRep -lTKTopAlgo -lTKPrim
+                -lTKernel -lTKMath -lTKG3d -lTKGeomBase -lTKBRep -lTKTopAlgo \
+                -lTKPrim
               out="$(./box)"
               echo "$out"
               [ "$out" = "8.0.1 24" ]
