@@ -39,9 +39,15 @@ jobs:
 ```
 
 That is the whole of it for a package that depends on nothing but Octave.
-It needs no secrets and no other file.  Four jobs run: Linux on Octave
-11.1.0 and 11.3.0, Windows on 11.3.0, and macOS on whatever version
-Homebrew currently ships.
+It needs no secrets and no other file.  That one line tests the package on
+three platforms, in five jobs: Linux on Octave 11.1.0 and 11.3.0 in the
+official containers, Windows on 11.1.0 and 11.3.0, and macOS on whatever
+version Homebrew currently ships.  The [inputs](#inputs) change which.
+
+The `uses:` line is long because it names a reusable workflow, which GitHub
+requires by its full path inside `.github/workflows/`.  Only an action can be
+named as briefly as `owner/repo@v1`, and an action runs inside a single job
+on a single runner, so it could not start jobs on three platforms.
 
 If the package depends on other Octave packages, name them in the order
 they must be installed:
@@ -295,7 +301,7 @@ needs nothing else.
 ### Getting `fntests.log`
 
 Every job uploads Octave's own test log whether it passed or failed.  It is
-kept for 14 days.  Download all four at once, each into a folder named after
+kept for 14 days.  Download all five at once, each into a folder named after
 its job:
 
 ```
