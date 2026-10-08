@@ -439,8 +439,12 @@ libraries in `/usr/local/lib` and the headers in
 ```
 
 The build is the same for every Octave 11 container, since they all share
-one Ubuntu 26.04 base.  The headers its `-dev` packages would bring are
-not needed beyond the package's own, such as `libx11-dev` for X11.
+one Ubuntu 26.04 base.  The job installs only what the package needs beyond
+it, such as `libx11-dev` for X11, and whatever Ubuntu's own Open CASCADE
+packages would have pulled in with them that the package uses: the
+containers carry none of the fonts Open CASCADE looks for, so a package that
+draws text with it needs `fontconfig` and a font, such as
+`fonts-dejavu-core`.
 
 ### Available builds
 
