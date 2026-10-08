@@ -10,7 +10,9 @@ The Windows part is what this repository also holds data for: GitHub offers
 no Octave on a Windows runner, so each release here carries GNU's Windows
 build of Octave unchanged, and a composite action installs it.  Linux uses
 the official Octave containers and macOS uses Homebrew, so neither needs
-anything stored here.
+anything stored here, except for a package that needs a newer Open CASCADE
+than the containers ship: a release here carries a build of it, and a
+second action fetches it.
 
 ## Adopting it
 
@@ -402,13 +404,66 @@ source code for each archive is available from:
 
 Each revision is recorded in its archive's `HG-ID` file.
 
+## Open CASCADE for the Linux containers
+
+The Octave containers are Ubuntu 26.04, whose Open CASCADE is 7.9.  A package
+that also wants to test against 8.0 can unpack a build of it into the
+container instead.  `occt/action.yml` downloads the archive from a release of
+this repository, or restores it from the cache, and checks its SHA-256
+checksum; the job unpacks it at `/` inside the container, which puts the
+libraries in `/usr/local/lib` and the headers in
+`/usr/local/include/opencascade`:
+
+```yaml
+      - id: occt
+        uses: pr0m1th3as/octave-ci/occt@v1
+        with:
+          version: '8.0.1'
+      - shell: bash
+        env:
+          ARCHIVE: ${{ steps.occt.outputs.archive }}
+        run: |
+          docker run --rm --volume "$(dirname "$ARCHIVE"):/occt" \
+            --volume "$PWD:/work" --workdir /work \
+            --env NAME="$(basename "$ARCHIVE")" \
+            ghcr.io/gnu-octave/octave:11.3.0 bash -c '
+              sudo tar -C / -xzf "/occt/$NAME" && sudo ldconfig
+              export OCCT_INC=/usr/local/include/opencascade
+              ...'
+```
+
+The build is the same for every Octave 11 container, since they all share
+one Ubuntu 26.04 base.  The headers its `-dev` packages would bring are
+not needed beyond the package's own, such as `libx11-dev` for X11.
+
+### Available builds
+
+| Open CASCADE | System | Release |
+|--------------|--------|---------|
+| 8.0.1 | Ubuntu 26.04, x86-64 | [`occt-8.0.1`][o-8.0.1] |
+
+[o-8.0.1]: https://github.com/pr0m1th3as/octave-ci/releases/tag/occt-8.0.1
+
+### Making a build
+
+`build-occt.yml` is run by hand, with the Open CASCADE version and the Octave
+container to build in.  It builds Open CASCADE from its source release with
+the libraries a package links and the viewer needs (no Draw, no samples, none
+of the optional third-party products), installs it into a staging folder and
+stores it as the release `occt-VERSION`, replacing the archive if the release
+exists. A build should take about half an hour.  It needs running again for a
+new Open CASCADE version and whenever the containers move to another Ubuntu.
+
 ## This repository's own tests
 
 `tests/ciprobe` is a small package that exists only to be installed and
 tested by the workflows here.  It has a `DESCRIPTION`, a function with
 tests, and a `.cc` file, so a run of `test-package.yml` proves the whole
 path on every platform, compilation included, without depending on a real
-package.  `test-windows.yml` tests the Windows action by itself.
+package.  `test-windows.yml` tests the Windows action by itself, and
+`test-occt.yml` the Open CASCADE action: it fetches the 8.0.1 build in the
+11.1.0 and 11.3.0 containers, compiles a small program against it and checks
+the version it reports and the volume of a box it makes.
 
 `tests/ciwarn` is the fixture for the warnings job, and it is a second
 package rather than a second file in `ciprobe` because the two demonstrate

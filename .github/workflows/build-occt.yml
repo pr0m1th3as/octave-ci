@@ -1,0 +1,98 @@
+name: Build Open CASCADE
+
+# Builds Open CASCADE from its source release inside the Octave container
+# and stores the libraries and headers as a release of this repository,
+# occt-VERSION, for occt/action.yml to fetch.  Run by hand, once for each
+# Open CASCADE version and whenever the containers' base system changes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Open CASCADE version, as 8.0.1'
+        required: true
+        default: '8.0.1'
+      image:
+        description: 'Octave container the build runs in'
+        required: true
+        default: '11.3.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Open CASCADE ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Build and install into a staging folder
+        shell: bash
+        env:
+          OCCT_VERSION: ${{ inputs.version }}
+          IMAGE: ${{ inputs.image }}
+        run: |
+          set -euo pipefail
+          # The container may build as a user other than the runner's
+          mkdir -p out
+          chmod 777 out
+          docker run --rm --volume "$PWD/out:/out" --env OCCT_VERSION \
+            "ghcr.io/gnu-octave/octave:$IMAGE" bash -c '
+              set -euo pipefail
+              S=""
+              if [ "$(id -u)" != 0 ]; then S=sudo; fi
+              # Sets ID and VERSION_ID, which name the archive, and VERSION
+              . /etc/os-release
+              echo "$PRETTY_NAME"
+              $S apt-get update -qq
+              $S env DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC \
+                apt-get install --yes -qq cmake ninja-build curl \
+                libfreetype-dev libfontconfig-dev libgl-dev libx11-dev \
+                > /dev/null
+              tag="V${OCCT_VERSION//./_}"
+              work="$(mktemp -d)"
+              cd "$work"
+              curl -fsSL --retry 3 --retry-all-errors -o src.tar.gz \
+                "https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/$tag.tar.gz"
+              mkdir src
+              tar -xzf src.tar.gz -C src --strip-components 1
+              # The libraries the packages link and the viewer needs: no
+              # Draw, no samples, none of the optional third-party products
+              cmake -G Ninja -S src -B build \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX=/usr/local \
+                -DBUILD_LIBRARY_TYPE=Shared \
+                -DBUILD_MODULE_Draw=OFF \
+                -DUSE_TCL=OFF -DUSE_TK=OFF \
+                -DUSE_FREETYPE=ON -DUSE_OPENGL=ON -DUSE_XLIB=ON \
+                -DUSE_FREEIMAGE=OFF -DUSE_FFMPEG=OFF -DUSE_TBB=OFF \
+                -DUSE_RAPIDJSON=OFF -DUSE_DRACO=OFF -DUSE_VTK=OFF \
+                -DBUILD_DOC_Overview=OFF
+              cmake --build build --parallel "$(nproc)"
+              DESTDIR="$work/stage" cmake --install build > /dev/null
+              grep "define OCC_VERSION_COMPLETE" \
+                "$work/stage/usr/local/include/opencascade/Standard_Version.hxx"
+              name="occt-$OCCT_VERSION-$ID-$VERSION_ID-$(uname -m)"
+              tar -C "$work/stage" -czf "/out/$name.tar.gz" \
+                usr/local/lib usr/local/include
+              (cd /out && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
+              chmod a+r /out/*
+            '
+          ls -l out
+
+      - name: Store the archive as a release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          IMAGE: ${{ inputs.image }}
+        run: |
+          set -euo pipefail
+          tag="occt-$VERSION"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$tag" out/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" out/* --repo "$GITHUB_REPOSITORY" \
+              --title "Open CASCADE $VERSION" \
+              --notes "Open CASCADE $VERSION, built from its source release in the Octave $IMAGE container: libraries and headers under /usr/local, for occt/action.yml."
+          fi

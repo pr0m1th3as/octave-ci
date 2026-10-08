@@ -1,0 +1,66 @@
+name: Open CASCADE action
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: test-occt-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    name: Octave ${{ matrix.octave }}, Open CASCADE 8.0.1
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        octave: ['11.1.0', '11.3.0']
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch Open CASCADE
+        id: occt
+        uses: ./occt
+        with:
+          version: '8.0.1'
+
+      - name: Build and run a program on it in the container
+        shell: bash
+        env:
+          ARCHIVE: ${{ steps.occt.outputs.archive }}
+          OCTAVE: ${{ matrix.octave }}
+        run: |
+          set -euo pipefail
+          docker run --rm --volume "$(dirname "$ARCHIVE"):/occt" \
+            --env NAME="$(basename "$ARCHIVE")" \
+            "ghcr.io/gnu-octave/octave:$OCTAVE" bash -c '
+              set -euo pipefail
+              S=""
+              if [ "$(id -u)" != 0 ]; then S=sudo; fi
+              $S tar -C / -xzf "/occt/$NAME"
+              $S ldconfig
+              cd "$(mktemp -d)"
+              cat > box.cxx <<EOF
+          #include <BRepGProp.hxx>
+          #include <BRepPrimAPI_MakeBox.hxx>
+          #include <GProp_GProps.hxx>
+          #include <Standard_Version.hxx>
+          #include <cstdio>
+          int
+          main ()
+          {
+            GProp_GProps p;
+            BRepGProp::VolumeProperties (BRepPrimAPI_MakeBox (2, 3, 4).Shape (), p);
+            printf ("%s %g\n", OCC_VERSION_COMPLETE, p.Mass ());
+            return 0;
+          }
+          EOF
+              g++ -O2 -I/usr/local/include/opencascade box.cxx -o box \
+                -lTKernel -lTKMath -lTKG3d -lTKBRep -lTKTopAlgo -lTKPrim
+              out="$(./box)"
+              echo "$out"
+              [ "$out" = "8.0.1 24" ]
+            '

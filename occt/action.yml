@@ -1,0 +1,69 @@
+name: 'Fetch Open CASCADE for package CI (Linux)'
+description: 'Download a build of Open CASCADE for the Octave containers'
+author: 'Andreas Bertsatos'
+
+inputs:
+  version:
+    description: 'Open CASCADE version; needs a matching release of this repository'
+    required: false
+    default: '8.0.1'
+  platform:
+    description: 'System the build is for, as the containers report it'
+    required: false
+    default: 'ubuntu-26.04-x86_64'
+
+outputs:
+  archive:
+    description: 'Path to the archive, to unpack at / inside the container'
+    value: ${{ steps.verify.outputs.archive }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Fetch the checksum
+      id: sum
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        PLATFORM: ${{ inputs.platform }}
+        BASE: https://github.com/pr0m1th3as/octave-ci/releases/download
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/octave-ci"
+        name="occt-$VERSION-$PLATFORM.tar.gz"
+        mkdir -p "$dir"
+        curl -fsSL --retry 3 --retry-all-errors \
+          -o "$dir/$name.sha256" "$BASE/occt-$VERSION/$name.sha256"
+        echo "hash=$(cut -d ' ' -f 1 "$dir/$name.sha256")" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the archive from the cache
+      id: cache
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/octave-ci/occt-${{ inputs.version }}-${{ inputs.platform }}.tar.gz
+        key: octave-ci-occt-${{ inputs.version }}-${{ inputs.platform }}-${{ steps.sum.outputs.hash }}
+
+    - name: Download and verify the archive
+      id: verify
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        PLATFORM: ${{ inputs.platform }}
+        BASE: https://github.com/pr0m1th3as/octave-ci/releases/download
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/octave-ci"
+        name="occt-$VERSION-$PLATFORM.tar.gz"
+        if [ ! -f "$dir/$name" ]; then
+          curl -fsSL --retry 3 --retry-all-errors \
+            -o "$dir/$name" "$BASE/occt-$VERSION/$name"
+        fi
+        (cd "$dir" && sha256sum -c "$name.sha256")
+        echo "archive=$dir/$name" >> "$GITHUB_OUTPUT"
+
+    - name: Save the archive to the cache
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/octave-ci/occt-${{ inputs.version }}-${{ inputs.platform }}.tar.gz
+        key: octave-ci-occt-${{ inputs.version }}-${{ inputs.platform }}-${{ steps.sum.outputs.hash }}
