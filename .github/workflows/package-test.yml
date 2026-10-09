@@ -88,8 +88,8 @@ jobs:
           for dep in $DEPENDENCIES; do
             code+="for a = 1:3; try; "
             code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
-            code+="if (a == 3); error ('$dep could not be installed'); endif; "
-            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="if (a == 3); error ('$dep could not be installed: %s', lasterr ()); endif; "
+            code+="printf ('installing $dep failed, retrying: %s\\n', lasterr ()); "
             code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="pkg ('install', '-local', '/work/package.tar.gz'); "
@@ -233,8 +233,8 @@ jobs:
           for dep in $DEPENDENCIES; do
             code+="for a = 1:3; try; "
             code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
-            code+="if (a == 3); error ('$dep could not be installed'); endif; "
-            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="if (a == 3); error ('$dep could not be installed: %s', lasterr ()); endif; "
+            code+="printf ('installing $dep failed, retrying: %s\\n', lasterr ()); "
             code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="printf ('%s\\n', '--- package build starts here ---'); "
@@ -258,8 +258,8 @@ jobs:
           for dep in $DEPENDENCIES; do
             code+="for a = 1:3; try; "
             code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
-            code+="if (a == 3); error ('$dep could not be installed'); endif; "
-            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="if (a == 3); error ('$dep could not be installed: %s', lasterr ()); endif; "
+            code+="printf ('installing $dep failed, retrying: %s\\n', lasterr ()); "
             code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="printf ('%s\\n', '--- package build starts here ---'); "
@@ -281,8 +281,8 @@ jobs:
           for dep in $DEPENDENCIES; do
             code+="for a = 1:3; try; "
             code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
-            code+="if (a == 3); error ('$dep could not be installed'); endif; "
-            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="if (a == 3); error ('$dep could not be installed: %s', lasterr ()); endif; "
+            code+="printf ('installing $dep failed, retrying: %s\\n', lasterr ()); "
             code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="printf ('%s\\n', '--- package build starts here ---'); "
@@ -387,8 +387,8 @@ jobs:
           for dep in $DEPENDENCIES; do
             code+="for a = 1:3; try; "
             code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
-            code+="if (a == 3); error ('$dep could not be installed'); endif; "
-            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="if (a == 3); error ('$dep could not be installed: %s', lasterr ()); endif; "
+            code+="printf ('installing $dep failed, retrying: %s\\n', lasterr ()); "
             code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="pkg ('install', '-local', '$archive'); "
@@ -511,8 +511,8 @@ jobs:
           for dep in $DEPENDENCIES; do
             code+="for a = 1:3; try; "
             code+="pkg ('install', '-forge', '-local', '$dep'); break; catch; "
-            code+="if (a == 3); error ('$dep could not be installed'); endif; "
-            code+="printf ('installing $dep failed, retrying\\n'); "
+            code+="if (a == 3); error ('$dep could not be installed: %s', lasterr ()); endif; "
+            code+="printf ('installing $dep failed, retrying: %s\\n', lasterr ()); "
             code+="pause (20 * a); end_try_catch; endfor; "
           done
           code+="pkg ('install', '-local', '$PWD/package.tar.gz'); "
