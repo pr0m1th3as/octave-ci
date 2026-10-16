@@ -1,0 +1,99 @@
+name: Build Open CASCADE for Windows
+
+# Builds Open CASCADE from its source release with the compiler, CMake and
+# make of each GNU Octave for Windows named, and stores the DLLs, import
+# libraries and headers in the release occt-VERSION, beside the Linux build:
+# one archive per Octave release, since the DLLs need that Octave's own C++
+# runtime.  Packages fetch them when they install.  Run by hand, once for each
+# Open CASCADE version and each new Octave release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Open CASCADE version, as 8.0.1'
+        required: true
+        default: '8.0.1'
+      octave:
+        description: 'JSON list of Octave releases of this repository to build with'
+        required: true
+        default: '["11.1.0", "11.3.0"]'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Open CASCADE ${{ inputs.version }}, Octave ${{ matrix.octave }}
+    runs-on: windows-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        octave: ${{ fromJSON(inputs.octave) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Octave with its CMake modules
+        uses: ./windows
+        with:
+          version: ${{ matrix.octave }}
+          cmake: 'true'
+
+      - name: Fetch the source
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --retry-all-errors --ssl-revoke-best-effort \
+            -o "$(cygpath -u "$RUNNER_TEMP")/occt-src.tar.gz" \
+            "https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V${VERSION//./_}.tar.gz"
+
+      # In Octave's own MSYS shell, whose /mingw64 is Octave's
+      - name: Build and pack
+        shell: cmd
+        env:
+          VERSION: ${{ inputs.version }}
+          OCTAVE: ${{ matrix.octave }}
+        run: >-
+          set "WORK=%RUNNER_TEMP%\o" &&
+          C:\octave-ci\octave-%OCTAVE%-w64\usr\bin\bash.exe
+          occt/build-windows.sh %VERSION% %OCTAVE%
+          "%RUNNER_TEMP%\occt-out" "%RUNNER_TEMP%\occt-src.tar.gz"
+
+      - name: Keep the archive for the release job
+        uses: actions/upload-artifact@v7
+        with:
+          name: occt-${{ inputs.version }}-octave-${{ matrix.octave }}-w64
+          path: ${{ runner.temp }}/occt-out/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  release:
+    name: Store the archives as a release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Upload to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          ls -l out
+          tag="occt-$VERSION"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$tag" out/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" out/* --repo "$GITHUB_REPOSITORY" \
+              --latest=false --title "Open CASCADE $VERSION" \
+              --notes "Open CASCADE $VERSION, built from its source release with the compiler, CMake and make of GNU Octave for Windows: DLLs, import libraries and headers, one archive per Octave release."
+          fi

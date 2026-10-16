@@ -12,7 +12,9 @@ build of Octave unchanged, and a composite action installs it.  Linux uses
 the official Octave containers and macOS uses Homebrew, so neither needs
 anything stored here, except for a package that needs a newer Open CASCADE
 than the containers ship: a release here carries a build of it, and a
-second action fetches it.
+second action fetches it.  The same release carries Open CASCADE for
+Windows, built with each Octave's own compiler, for packages to fetch when
+they install.
 
 ## Adopting it
 
@@ -375,6 +377,10 @@ the archive.
 It puts `octave-launch.exe` on the path and returns its full path in the
 `octave` output.  It takes about a minute.
 
+Its one input besides `version` is `cmake`, `'false'` by default.  Set to
+`'true'` it keeps the CMake modules, which a job building a C++ library with
+the CMake that comes with Octave needs, as the Open CASCADE build does.
+
 ### Available versions
 
 | Version | Release |
@@ -464,6 +470,42 @@ stores it as the release `occt-VERSION`, replacing the archive if the release
 exists. A build should take about half an hour.  It needs running again for a
 new Open CASCADE version and whenever the containers move to another Ubuntu.
 
+## Open CASCADE for Windows
+
+GNU Octave for Windows comes with its own compiler, CMake and make, and a
+package compiled against Open CASCADE must link a build made with that same
+compiler: vendor builds are made with Microsoft's and cannot be linked.  So
+the release `occt-VERSION` also carries one archive per Octave release,
+`occt-VERSION-octave-OCTAVE-w64.tar.gz` with its `.sha256`, holding the DLLs,
+their import libraries, the headers and the licence.  The DLLs need that
+Octave's own C++ runtime and FreeType, which every Octave for Windows has on
+its `PATH`, so an archive serves the Octave release it was built with and
+no other.
+
+These archives are for packages to fetch while `pkg install` runs, from a
+`pre_install.m`, rather than for jobs: a user installing the package on
+Windows has no other way to get them.  `drafting` does so, checking each
+archive against the checksum it carries for it.
+
+| Open CASCADE | Octave | Release |
+|--------------|--------|---------|
+| 8.0.1 | 11.1.0, 11.3.0 | [`occt-8.0.1`][o-8.0.1] |
+
+`build-occt-windows.yml` is run by hand, with the Open CASCADE version and a
+JSON list of Octave releases of this repository.  For each Octave it builds
+on a Windows runner, in that Octave's own MSYS shell with
+`occt/build-windows.sh`, with the same libraries as the Linux build plus
+Octave's FreeType, and uploads the archive to the release, replacing one of
+the same name.  The script runs as well on any Windows machine with Octave
+unpacked:
+
+```
+C:\octave-ci\octave-11.3.0-w64\usr\bin\bash.exe occt/build-windows.sh 8.0.1 11.3.0 C:\out
+```
+
+It needs running again for a new Open CASCADE version and for each new
+Octave release.
+
 ## This repository's own tests
 
 `tests/ciprobe` is a small package that exists only to be installed and
@@ -471,9 +513,10 @@ tested by the workflows here.  It has a `DESCRIPTION`, a function with
 tests, and a `.cc` file, so a run of `test-package.yml` proves the whole
 path on every platform, compilation included, without depending on a real
 package.  `test-windows.yml` tests the Windows action by itself, and
-`test-occt.yml` the Open CASCADE action: it fetches the 8.0.1 build in the
-11.1.0 and 11.3.0 containers, compiles a small program against it and checks
-the version it reports and the volume of a box it makes.
+`test-occt.yml` the Open CASCADE builds: it fetches the 8.0.1 build in the
+11.1.0 and 11.3.0 containers, and the Windows archive for each of those two
+Octave releases on a Windows runner, compiles a small program against each
+and checks the version it reports and the volume of a box it makes.
 
 `tests/ciwarn` is the fixture for the warnings job, and it is a second
 package rather than a second file in `ciprobe` because the two demonstrate

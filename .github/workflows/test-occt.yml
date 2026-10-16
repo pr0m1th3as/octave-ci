@@ -65,3 +65,67 @@ jobs:
               echo "$out"
               [ "$out" = "8.0.1 24" ]
             '
+
+  windows:
+    name: Windows, Octave ${{ matrix.octave }}, Open CASCADE 8.0.1
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        octave: ['11.1.0', '11.3.0']
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Octave
+        uses: ./windows
+        with:
+          version: ${{ matrix.octave }}
+
+      - name: Fetch and unpack the build for this Octave
+        shell: bash
+        env:
+          OCTAVE: ${{ matrix.octave }}
+          BASE: https://github.com/pr0m1th3as/octave-ci/releases/download/occt-8.0.1
+        run: |
+          set -euo pipefail
+          dir="$(cygpath -u "$RUNNER_TEMP")/occt"
+          name="occt-8.0.1-octave-$OCTAVE-w64.tar.gz"
+          mkdir -p "$dir"
+          cd "$dir"
+          for f in "$name" "$name.sha256"; do
+            curl -fsSL --retry 3 --retry-all-errors --ssl-revoke-best-effort \
+              -o "$f" "$BASE/$f"
+          done
+          sha256sum -c "$name.sha256"
+          tar -xzf "$name"
+
+      # With Octave's own compiler, the DLLs found on PATH
+      - name: Build and run a program on it
+        shell: bash
+        env:
+          OCTAVE: ${{ matrix.octave }}
+        run: |
+          set -euo pipefail
+          export PATH="/c/octave-ci/octave-$OCTAVE-w64/mingw64/bin:$PATH"
+          cd "$(cygpath -u "$RUNNER_TEMP")/occt"
+          cat > box.cxx <<'END'
+          #include <BRepGProp.hxx>
+          #include <BRepPrimAPI_MakeBox.hxx>
+          #include <GProp_GProps.hxx>
+          #include <Standard_Version.hxx>
+          #include <cstdio>
+          int
+          main ()
+          {
+            GProp_GProps p;
+            BRepGProp::VolumeProperties (BRepPrimAPI_MakeBox (2, 3, 4).Shape (), p);
+            printf ("%s %g\n", OCC_VERSION_COMPLETE, p.Mass ());
+            return 0;
+          }
+          END
+          g++ -O2 -Iinclude/opencascade box.cxx -o box.exe -Llib \
+            -lTKernel -lTKMath -lTKG3d -lTKGeomBase -lTKBRep -lTKTopAlgo \
+            -lTKPrim
+          out="$(PATH="$PWD/bin:$PATH" ./box.exe | tr -d '\r')"
+          echo "$out"
+          [ "$out" = "8.0.1 24" ]
