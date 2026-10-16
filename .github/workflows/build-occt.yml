@@ -73,8 +73,10 @@ jobs:
               grep "define OCC_VERSION_COMPLETE" \
                 "$work/stage/usr/local/include/opencascade/Standard_Version.hxx"
               name="occt-$OCCT_VERSION-$ID-$VERSION_ID-$(uname -m)"
+              # With the licence and its exception, which installing puts
+              # in share/doc
               tar -C "$work/stage" -czf "/out/$name.tar.gz" \
-                usr/local/lib usr/local/include
+                usr/local/lib usr/local/include usr/local/share/doc/opencascade
               (cd /out && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
               chmod a+r /out/*
             '
@@ -93,6 +95,6 @@ jobs:
             gh release upload "$tag" out/* --clobber --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$tag" out/* --repo "$GITHUB_REPOSITORY" \
-              --title "Open CASCADE $VERSION" \
-              --notes "Open CASCADE $VERSION, built from its source release in the Octave $IMAGE container: libraries and headers under /usr/local, for occt/action.yml."
+              --latest=false --title "Open CASCADE $VERSION" \
+              --notes "Open CASCADE $VERSION, built from its source release in the Octave $IMAGE container: libraries, headers and licence under /usr/local, for occt/action.yml."
           fi
